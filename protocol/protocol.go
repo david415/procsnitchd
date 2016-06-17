@@ -3,10 +3,13 @@ package protocol
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"net"
+	"strconv"
 	"strings"
 
 	"github.com/op/go-logging"
+	"github.com/subgraph/go-procsnitch"
 )
 
 var log = logging.MustGetLogger("procsnitchd_protocol")
@@ -28,22 +31,22 @@ func HandleNewConnection(conn net.Conn) error {
 }
 
 type ProcSnitchSession struct {
-	appConn       net.Conn
-	appConnReader *bufio.Reader
-	procInfo      procsnitch.ProcInfo
+	conn       net.Conn
+	connReader *bufio.Reader
+	procInfo   procsnitch.ProcInfo
 }
 
 func NewProcSnitchSession(conn net.Conn) *ProcSnitchSession {
 	p := ProcSnitchSession{
-		appConn:       conn,
-		appConnReader: bufio.NewReader(conn),
-		procInfo:      procsnitch.SystemProcInfo{},
+		conn:       conn,
+		connReader: bufio.NewReader(conn),
+		procInfo:   procsnitch.SystemProcInfo{},
 	}
 	return &p
 }
 
 func (s *ProcSnitchSession) readLine() (cmd string, splitCmd []string, rawLine []byte, err error) {
-	if rawLine, err = s.appConnReader.ReadBytes('\n'); err != nil {
+	if rawLine, err = s.connReader.ReadBytes('\n'); err != nil {
 		return
 	}
 	trimmedLine := bytes.TrimSpace(rawLine)
@@ -52,37 +55,63 @@ func (s *ProcSnitchSession) readLine() (cmd string, splitCmd []string, rawLine [
 	return
 }
 
-/*
-type ProcInfo interface {
-	LookupTCPSocketProcess(srcPort uint16, dstAddr net.IP, dstPort uint16) *Info
-	LookupUNIXSocketProcess(socketFile string) *Info
-	LookupUDPSocketProcess(srcPort uint16) *Info
+func (s *ProcSnitchSession) writeProcInfo(info *procsnitch.Info) {
+	out := fmt.Sprintf("%d %d %d %s %s", info.UID, info.Pid, info.ParentPid, info.ExePath, info.CmdLine)
+	s.conn.Write([]byte(out + "\r\n"))
 }
-// Info is a struct containing the result of a socket proc query
-type Info struct {
-	UID       int
-	Pid       int
-	ParentPid int
-	loaded    bool
-	ExePath   string
-	CmdLine   string
-}
-*/
+
 func (s *ProcSnitchSession) onCmdUnixInfo(args []string) error {
 	if len(args) < 2 {
 		log.Error("invalid number of arguments")
-		return fmt.Error("invalid number of arguments")
+		return fmt.Errorf("invalid number of arguments")
 	}
 	info := s.procInfo.LookupUNIXSocketProcess(args[1])
-	fmt.Sprintf("")
+	s.writeProcInfo(info)
 	return nil
 }
 
 func (s *ProcSnitchSession) onCmdTcpInfo(args []string) error {
+	var srcPort, dstPort int64
+	var dstAddr net.IP
+	var err error
+
+	if len(args) < 4 {
+		log.Error("invalid number of arguments")
+		return fmt.Errorf("invalid number of arguments")
+	}
+
+	srcPort, err = strconv.ParseInt(args[1], 10, 16)
+	if err != nil {
+		log.Error("failed to parse TCP port")
+		return fmt.Errorf("failed to parse TCP port")
+	}
+	dstAddr = net.ParseIP(args[2])
+	if dstAddr == nil {
+		log.Error("failed to parse IP")
+		return fmt.Errorf("failed to parse IP")
+	}
+	dstPort, err = strconv.ParseInt(args[3], 10, 16)
+	if err != nil {
+		log.Error("failed to parse TCP port")
+		return fmt.Errorf("failed to parse TCP port")
+	}
+
+	info := s.procInfo.LookupTCPSocketProcess(uint16(srcPort), dstAddr, uint16(dstPort))
+	s.writeProcInfo(info)
 	return nil
 }
 
 func (s *ProcSnitchSession) onCmdUdpInfo(args []string) error {
+	var srcPort int64
+	var err error
+
+	srcPort, err = strconv.ParseInt(args[1], 10, 16)
+	if err != nil {
+		log.Error("failed to parse UDP port")
+		return fmt.Errorf("failed to parse UDP port")
+	}
+	info := s.procInfo.LookupUDPSocketProcess(uint16(srcPort))
+	s.writeProcInfo(info)
 	return nil
 }
 
