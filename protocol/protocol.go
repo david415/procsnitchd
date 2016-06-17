@@ -20,9 +20,9 @@ func SetLogger(logger *logging.Logger) {
 }
 
 const (
-	cmdTcpInfo  = "TCPINFO"
-	cmdUnixInfo = "UNIXINFO"
-	cmdUdpInfo  = "UDPINFO"
+	CmdTcpInfo  = "TCPINFO"
+	CmdUnixInfo = "UNIXINFO"
+	CmdUdpInfo  = "UDPINFO"
 )
 
 func HandleNewConnection(conn net.Conn) error {
@@ -123,15 +123,15 @@ func (s *ProcSnitchSession) Start() error {
 			return err
 		}
 		switch cmd {
-		case cmdUnixInfo:
+		case CmdUnixInfo:
 			if err = s.onCmdUnixInfo(splitCmd); err != nil {
 				return err
 			}
-		case cmdTcpInfo:
+		case CmdTcpInfo:
 			if err = s.onCmdTcpInfo(splitCmd); err != nil {
 				return err
 			}
-		case cmdUdpInfo:
+		case CmdUdpInfo:
 			if err = s.onCmdUdpInfo(splitCmd); err != nil {
 				return err
 			}
