@@ -27,13 +27,16 @@ func NewProcsnitchRPC(procInfo procsnitch.ProcInfo) *ProcsnitchRPC {
 }
 
 func (t *ProcsnitchRPC) LookupUNIXSocketProcess(socketFile *string, info *procsnitch.Info) error {
-	info = t.procInfo.LookupUNIXSocketProcess(*socketFile)
+	newInfo := t.procInfo.LookupUNIXSocketProcess(*socketFile)
+	*info = *newInfo
 	return nil
 }
 
-func HandleNewConnection(conn net.Conn) error {
-	s := NewProcSnitchSession(conn)
-	return s.Start()
+func ConnectionHandlerFactory(procInfo procsnitch.ProcInfo) func(conn net.Conn) error {
+	return func(conn net.Conn) error {
+		s := NewProcSnitchSession(conn, procInfo)
+		return s.Start()
+	}
 }
 
 type ProcSnitchSession struct {
@@ -41,12 +44,12 @@ type ProcSnitchSession struct {
 	rpcServer *rpc.Server
 }
 
-func NewProcSnitchSession(conn net.Conn) *ProcSnitchSession {
+func NewProcSnitchSession(conn net.Conn, procInfo procsnitch.ProcInfo) *ProcSnitchSession {
 	p := ProcSnitchSession{
 		conn:      conn,
 		rpcServer: rpc.NewServer(),
 	}
-	rpc := NewProcsnitchRPC(procsnitch.SystemProcInfo{})
+	rpc := NewProcsnitchRPC(procInfo)
 	p.rpcServer.Register(rpc)
 	return &p
 }

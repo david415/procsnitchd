@@ -6,6 +6,7 @@ import (
 
 	"github.com/op/go-logging"
 	"github.com/subgraph/go-procsnitch"
+	//	"github.com/subgraph/procsnitchd/protocol"
 )
 
 var log = logging.MustGetLogger("procsnitchd_protocol")
@@ -35,15 +36,20 @@ func (s *SnitchClient) Start() error {
 		return err
 	}
 	s.client = rpc.NewClient(s.conn)
+
 	return nil
+}
+
+func (s *SnitchClient) Stop() error {
+	return s.client.Close()
 }
 
 // implements the go-procsnitch ProcInfo interface
 
 func (s *SnitchClient) LookupUNIXSocketProcess(socketFile string) *procsnitch.Info {
 	var err error
-	var info procsnitch.Info
-	err = s.client.Call("ProcsnitchRPC.LookupUNIXSocketProcess", &socketFile, &info)
+	info := procsnitch.Info{}
+	err = s.client.Call("ProcsnitchRPC.LookupUNIXSocketProcess", socketFile, &info)
 	if err != nil {
 		panic("wtf")
 	}
